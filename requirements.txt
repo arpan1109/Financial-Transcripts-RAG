@@ -1,0 +1,17 @@
+langchain
+langchain-core
+langchain-community
+langchain-text-splitters
+
+pypdf
+pymupdf
+tqdm
+
+sentence-transformers
+chromadb
+scikit-learn
+
+langchain-groq
+python-dotenv
+langchain-huggingface
+streamlit
