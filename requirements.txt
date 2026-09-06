@@ -1,9 +1,11 @@
 langchain
 langchain-core
 langchain-community
+langchain-classic
 langchain-text-splitters
 
 pypdf
+numpy
 pymupdf
 tqdm
 

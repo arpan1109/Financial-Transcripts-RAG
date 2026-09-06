@@ -5,11 +5,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 def load_and_chunk_txt_data(data_directory_path):
     # 1. Load all .txt files from all subfolders automatically
     loader = DirectoryLoader(
-    data_directory_path, 
-    glob="**/*.txt", 
-    loader_cls=TextLoader, 
-    loader_kwargs={'encoding': 'utf-8'}
-)
+        data_directory_path, 
+        glob="**/*.txt", 
+        loader_cls=TextLoader, 
+        loader_kwargs={'encoding': 'utf-8'}
+    )
     documents = loader.load()
     
     # 2. Extract metadata from the file paths
@@ -25,12 +25,14 @@ def load_and_chunk_txt_data(data_directory_path):
             # Extract the folder name as the Company
             doc.metadata["company"] = path_parts[-2] 
             
-            # Extract the Year and Quarter from the filename
+            # Extract the Year and Quarter from the filename safely
             filename = path_parts[-1].replace(".txt", "")
-            if "_" in filename:
-                year, quarter = filename.split("_", 1)
-                doc.metadata["year"] = year
-                doc.metadata["quarter"] = quarter
+            file_parts = filename.split("_")
+            
+            # Ensures index out of bounds does not occur on irregular files
+            if len(file_parts) >= 2:
+                doc.metadata["year"] = file_parts[0]      # Extracts "2023"
+                doc.metadata["quarter"] = file_parts[1]   # Extracts "Q4"
                 
     # 3. Split the tagged documents into vectors
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
