@@ -6,7 +6,7 @@ import streamlit as st
 from dotenv import load_dotenv
 import fitz  # PyMuPDF
 
-from vector_store import load_existing_vector_store, get_embedder
+from vector_store import load_existing_vector_store, get_embedder, SimpleVectorStore
 from build_db import chunk_text, extract_financial_metadata
 from search import retrieve_documents
 from llm import reformulate_query, generate_streaming_answer, extract_kpis, parse_stream
@@ -20,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-store = load_existing_vector_store()
+base_store = load_existing_vector_store()
 
 # --------------------------------------------------
 # Styling (Replit UI Theme)
@@ -64,6 +64,9 @@ def initialize_state():
         st.session_state.user_files = {}
     if "user_selected" not in st.session_state:
         st.session_state.user_selected = set()
+    if "user_store" not in st.session_state:
+        # PURE IN-MEMORY STORE FOR THIS SESSION ONLY (NEVER WRITES TO DISK)
+        st.session_state.user_store = SimpleVectorStore(path=None)
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "kpi_snapshot" not in st.session_state:
@@ -74,9 +77,14 @@ initialize_state()
 def selected_source_names() -> list[str]:
     return [*sorted(st.session_state.library_selected), *sorted(st.session_state.user_selected)]
 
-def library_chunk_count() -> int:
-    sources = store.get_indexed_sources()
-    return sum(sources[name]["chunks"] for name in st.session_state.library_selected if name in sources)
+def total_context_chunk_count() -> int:
+    lib_sources = base_store.get_indexed_sources()
+    lib_chunks = sum(lib_sources[name]["chunks"] for name in st.session_state.library_selected if name in lib_sources)
+    
+    usr_sources = st.session_state.user_store.get_indexed_sources()
+    usr_chunks = sum(usr_sources[name]["chunks"] for name in st.session_state.user_selected if name in usr_sources)
+    
+    return lib_chunks + usr_chunks
 
 def upload_metadata(uploaded_file) -> str:
     extension = Path(uploaded_file.name).suffix.replace(".", "").upper() or "FILE"
@@ -111,7 +119,7 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
         search = st.text_input("Search", placeholder="Search documents...", label_visibility="collapsed", key="lib_search")
-        indexed_library = store.get_indexed_sources()
+        indexed_library = base_store.get_indexed_sources()
 
         companies = {}
         for name, info in indexed_library.items():
@@ -155,7 +163,7 @@ with st.sidebar:
 
     with uploads_tab:
         st.markdown(
-            '<div class="source-info private"><b>Private session files</b><p>Upload files on the fly. Ingested instantly into RAM.</p></div>',
+            '<div class="source-info private"><b>Private session files</b><p>Upload files on the fly. Ingested strictly into temporary RAM.</p></div>',
             unsafe_allow_html=True,
         )
 
@@ -183,27 +191,38 @@ with st.sidebar:
                             ids.append(str(uuid.uuid4()))
                             docs.append(chunk)
                             metadatas.append({"source": fname, "page": page_num, "company": company, "year": year, "quarter": quarter})
+                    
+                    # Store ONLY in temporary session RAM (persist=False)
                     if docs:
                         embeddings = embedder.encode(docs, show_progress_bar=False).tolist()
-                        store.add(ids=ids, documents=docs, metadatas=metadatas, embeddings=embeddings)
+                        st.session_state.user_store.add(ids=ids, documents=docs, metadatas=metadatas, embeddings=embeddings, persist=False)
 
         for name, uploaded_file in st.session_state.user_files.items():
-            checked = st.checkbox(f"{name}\n{upload_metadata(uploaded_file)}", value=name in st.session_state.user_selected, key=f"upload_{name}")
-            if checked: st.session_state.user_selected.add(name)
-            else: st.session_state.user_selected.discard(name)
+            if f"upload_{name}" not in st.session_state:
+                st.session_state[f"upload_{name}"] = name in st.session_state.user_selected
+                
+            checked = st.checkbox(f"{name}\n{upload_metadata(uploaded_file)}", key=f"upload_{name}")
+            if checked:
+                st.session_state.user_selected.add(name)
+            else:
+                st.session_state.user_selected.discard(name)
 
         st.markdown("<br>", unsafe_allow_html=True)
+        # INSTANT ZERO-CONTAMINATION RESET
         if st.button("🗑️ Clear Uploaded Files", use_container_width=True):
             st.session_state.user_files = {}
             st.session_state.user_selected = set()
-            store._load() 
+            st.session_state.user_store = SimpleVectorStore(path=None)
+            for k in list(st.session_state.keys()):
+                if k.startswith("upload_"):
+                    del st.session_state[k]
             st.rerun()
 
     selected_count = len(selected_source_names())
-    chunk_count = library_chunk_count()
+    total_chunks = total_context_chunk_count()
 
     st.markdown(
-        f'<div class="context"><div class="section-kicker">Current context</div><div class="helper">{chunk_count:,} indexed chunks · {selected_count} sources selected</div></div>',
+        f'<div class="context"><div class="section-kicker">Current context</div><div class="helper">{total_chunks:,} indexed chunks · {selected_count} sources selected</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -249,7 +268,7 @@ with doc_tab:
         st.info("Execute a financial query in chat to populate this interactive dashboard.")
 
 # --------------------------------------------------
-# RAG Execution Pipeline (FLUID LOGIC)
+# RAG Execution Pipeline
 # --------------------------------------------------
 if prompt := st.chat_input("Ask a question about your sources..."):
     source_names = selected_source_names()
@@ -266,19 +285,21 @@ if prompt := st.chat_input("Ask a question about your sources..."):
             with st.chat_message("assistant", avatar="🧠"):
                 try:
                     with st.spinner("Analyzing context..."):
-                        # 1. Memory: Reformulate follow-ups seamlessly
                         final_query = reformulate_query(prompt, st.session_state.messages)
                         
-                        # 2. Retrieval: Search active sources without rigid metadata blocking
-                        docs = retrieve_documents(final_query, active_sources=source_names)
+                        # Searches library sources and user sources concurrently without disk interference
+                        docs = retrieve_documents(
+                            final_query, 
+                            library_sources=list(st.session_state.library_selected),
+                            user_sources=list(st.session_state.user_selected),
+                            user_store=st.session_state.user_store
+                        )
 
                     if docs:
-                        # 3. Generation: Stream response with citations
                         raw_stream = generate_streaming_answer(final_query, docs, st.session_state.messages)
                         answer = st.write_stream(parse_stream(raw_stream))
                         st.session_state.messages.append({"role": "assistant", "content": answer})
 
-                        # 4. Background KPIs: Dynamically label dashboard using the top retrieved document
                         top_doc = docs[0]
                         top_context = "\n".join([d.page_content for d in docs[:4]])
                         kpi_json = extract_kpis(top_context)
