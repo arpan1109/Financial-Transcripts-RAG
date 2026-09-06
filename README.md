@@ -22,6 +22,19 @@
 - **Executive KPI Dashboard:** Interactive secondary dashboard providing automated extraction of revenue, margins, net income, and diluted EPS.
 
 ---
+## Folder Structure
+├── .streamlit/
+│   └── config.toml          # Custom theme configuration
+├── data/                    # Raw financial transcripts (Alphabet, Microsoft, Nvidia)
+├── vector_db/
+│   └── store.pkl            # Pre-computed NumPy vectors & metadata
+├── app.py                   # Streamlit frontend & interactive dashboard
+├── build_db.py              # Chunking, metadata extraction & serialization pipeline
+├── llm.py                   # Groq API streaming, query reformulation & citation handling
+├── search.py                # Dual-store vector search & similarity ranking
+├── vector_store.py          # Custom in-memory NumPy vector store implementation
+├── requirements.txt         # Lightweight deployment dependencies (CPU-optimized PyTorch)
+└── README.md
 
 ## 🏗️ System Architecture
 
@@ -44,3 +57,5 @@ User Query ──► Query Reformulation (Memory Heuristic)
                      │
                      ▼
    Grounded Answer Stream with [n] Citations + KPI Extraction
+
+#
