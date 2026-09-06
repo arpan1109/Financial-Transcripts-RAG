@@ -24,3 +24,23 @@
 ---
 
 ## 🏗️ System Architecture
+
+```text
+User Query ──► Query Reformulation (Memory Heuristic)
+                     │
+                     ▼
+          Target Vector Embedding (all-MiniLM-L6-v2)
+                     │
+                     ▼
+     In-Memory NumPy Dual-Store Cosine Distance
+      ├── Persistent Knowledge Base (store.pkl)
+      └── Ephemeral Session Uploads (RAM)
+                     │
+                     ▼
+         Top Relevant Chunks (with Metadata)
+                     │
+                     ▼
+       Groq API Streaming Inference (LLaMA / Mixtral)
+                     │
+                     ▼
+   Grounded Answer Stream with [n] Citations + KPI Extraction
