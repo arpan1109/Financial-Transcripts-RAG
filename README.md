@@ -23,18 +23,7 @@
 
 ---
 ## Folder Structure
-├── .streamlit/
-│   └── config.toml          # Custom theme configuration
-├── data/                    # Raw financial transcripts (Alphabet, Microsoft, Nvidia)
-├── vector_db/
-│   └── store.pkl            # Pre-computed NumPy vectors & metadata
-├── app.py                   # Streamlit frontend & interactive dashboard
-├── build_db.py              # Chunking, metadata extraction & serialization pipeline
-├── llm.py                   # Groq API streaming, query reformulation & citation handling
-├── search.py                # Dual-store vector search & similarity ranking
-├── vector_store.py          # Custom in-memory NumPy vector store implementation
-├── requirements.txt         # Lightweight deployment dependencies (CPU-optimized PyTorch)
-└── README.md
+<img width="940" height="534" alt="image" src="https://github.com/user-attachments/assets/8c18b88f-631a-465a-ab43-e556420df8d2" />
 
 ## 🏗️ System Architecture
 
