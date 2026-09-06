@@ -1,19 +1,27 @@
-langchain
-langchain-core
-langchain-community
-langchain-classic
-langchain-text-splitters
+# langchain
+# langchain-core
+# langchain-community
+# langchain-classic
+# langchain-text-splitters
 
-pypdf
-numpy
-pymupdf
-tqdm
+# pypdf
+# numpy
+# pymupdf
+# tqdm
 
-sentence-transformers
-chromadb
-scikit-learn
+# sentence-transformers
+# chromadb
+# scikit-learn
 
-langchain-groq
-python-dotenv
-langchain-huggingface
+# langchain-groq
+# python-dotenv
+# langchain-huggingface
+# streamlit
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
 streamlit
+groq
+python-dotenv
+pymupdf
+numpy
+sentence-transformers
